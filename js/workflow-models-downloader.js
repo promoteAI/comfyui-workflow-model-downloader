@@ -5431,6 +5431,28 @@ app.registerExtension({
         });
 
         app.ui.settings.addSetting({
+            id: "WorkflowModelsDownloader.ModelScopeApiKey",
+            category: ["Workflow Models Downloader", "API Keys", "ModelScope"],
+            name: "ModelScope API Key",
+            tooltip: "Your ModelScope API key for downloading models from modelscope.cn. Get it at modelscope.cn",
+            type: "text",
+            defaultValue: "",
+            onChange: async (value) => {
+                if (value && !value.startsWith('***')) {
+                    try {
+                        await api.fetchApi("/workflow-models/settings", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ modelscope_api_key: value })
+                        });
+                    } catch (e) {
+                        console.error("[WMD] Failed to save ModelScope API key:", e);
+                    }
+                }
+            }
+        });
+
+        app.ui.settings.addSetting({
             id: "WorkflowModelsDownloader.CivitAIApiKey",
             category: ["Workflow Models Downloader", "API Keys", "CivitAI"],
             name: "CivitAI API Key",

@@ -163,6 +163,7 @@ def load_settings():
     default_settings = {
         'huggingface_token': '',
         'huggingface_mirror': '',
+        'modelscope_api_key': '',
         'civitai_api_key': '',
         'tavily_api_key': '',
         'enable_advanced_search': False,
@@ -189,6 +190,7 @@ def load_settings():
                 # Map ComfyUI setting keys to our internal keys
                 _settings_cache = {
                     'huggingface_token': comfy_settings.get('WorkflowModelsDownloader.HuggingFaceToken', ''),
+                    'modelscope_api_key': comfy_settings.get('WorkflowModelsDownloader.ModelScopeApiKey', ''),
                     'huggingface_mirror': comfy_settings.get('WorkflowModelsDownloader.HuggingFaceMirror', ''),
                     'civitai_api_key': comfy_settings.get('WorkflowModelsDownloader.CivitAIApiKey', ''),
                     'tavily_api_key': comfy_settings.get('WorkflowModelsDownloader.TavilyApiKey', ''),
@@ -344,6 +346,14 @@ def get_huggingface_base_url():
     if base:
         return base.rstrip('/')
     return "https://huggingface.co"
+
+
+
+
+def get_modelscope_api_key():
+    '''Get ModelScope API key from settings'''
+    settings = load_settings()
+    return settings.get('modelscope_api_key', '')
 
 
 def get_civitai_api_key():
@@ -793,6 +803,66 @@ def search_civitai_api(filename):
 
     _url_search_cache[cache_key] = None
     return None
+
+
+
+
+
+def search_modelscope_api(filename, limit=10):
+    '''Search for models on ModelScope'''
+    results = []
+    try:
+        # ModelScope API search endpoint
+        search_url = "https://www.modelscope.cn/api/v1/models/search"
+        params = {
+            "keyword": filename,
+            "page": 1,
+            "page_size": limit
+        }
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        # Use ModelScope API key if available
+        api_key = get_modelscope_api_key()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        
+        response = requests.get(search_url, params=params, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if data.get("success") and data.get("data", {}).get("items"):
+            for item in data["data"]["items"]:
+                model_id = item.get("ModelId", "")
+                model_name = item.get("ModelName", item.get("model_name", filename))
+                model_url = f"https://www.modelscope.cn/models/{model_id}"
+                
+                # Get model files if available
+                files = []
+                if "Files" in item and isinstance(item["Files"], list):
+                    files = item["Files"]
+                elif "file_list" in item:
+                    files = item["file_list"]
+                
+                results.append({
+                    "filename": filename,
+                    "url": model_url,
+                    "source": "modelscope",
+                    "name": model_name,
+                    "model_id": model_id,
+                    "files": files,
+                    "description": item.get("Description", "")[:200]
+                })
+        
+        logging.info(f"[WMD] ModelScope search found {len(results)} results for {filename}")
+        
+    except Exception as e:
+        logging.error(f"[WMD] ModelScope search error: {e}")
+    
+    return results
 
 
 def search_tavily_api(filename):
@@ -2910,6 +2980,55 @@ async def download_model(request):
 
 
 @routes.get("/workflow-models/progress/{download_id}")
+
+
+@routes.post("/workflow-models/download-modelscope")
+async def download_from_modelscope(request):
+    """Start downloading a model from ModelScope"""
+    try:
+        data = await request.json()
+
+        model_id = data.get('model_id')
+        filename = data.get('filename')
+        target_dir = data.get('directory')
+
+        if not all([model_id, filename, target_dir]):
+            return web.json_response({'error': 'Missing required fields'}, status=400)
+
+        # Generate download ID
+        download_id = f"ms_{model_id}_{filename}".replace("/", "_").replace("\", "_")
+
+        # Check if already downloading
+        with download_lock:
+            if download_id in download_progress and download_progress[download_id].get('status') == 'downloading':
+                return web.json_response({'error': 'Already downloading'}, status=400)
+
+            download_progress[download_id] = {
+                'status': 'starting',
+                'progress': 0,
+                'filename': filename,
+                'total_size': 0,
+                'downloaded': 0,
+                'source': 'modelscope',
+                'model_id': model_id
+            }
+
+        # Start download in background thread
+        thread = threading.Thread(
+            target=_download_from_modelscope_thread,
+            args=(download_id, model_id, filename, target_dir)
+        )
+        thread.start()
+
+        return web.json_response({
+            'success': True,
+            'download_id': download_id,
+            'message': f"Started downloading {filename} from ModelScope"
+        })
+    except Exception as e:
+        logging.error(f"[Workflow-Models-Downloader] ModelScope download error: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
 async def get_download_progress(request):
     """Get download progress for a specific download"""
     download_id = request.match_info['download_id']
@@ -3335,6 +3454,7 @@ async def get_settings(request):
             'civitai_api_key': mask_token(settings.get('civitai_api_key', '')),
             'tavily_api_key': mask_token(settings.get('tavily_api_key', '')),
             'huggingface_token_set': bool(settings.get('huggingface_token', '')),
+            'modelscope_api_key_set': bool(settings.get('modelscope_api_key', '')), bool(settings.get('modelscope_api_key', '')),
             'civitai_api_key_set': bool(settings.get('civitai_api_key', '')),
             'tavily_api_key_set': bool(settings.get('tavily_api_key', '')),
             'enable_advanced_search': settings.get('enable_advanced_search', False),
@@ -3362,9 +3482,15 @@ async def update_settings(request):
                 current['huggingface_token'] = ''
 
         if 'huggingface_mirror' in data:
-            # Mirror can be empty string to disable
             mirror = (data.get('huggingface_mirror') or '').strip()
             current['huggingface_mirror'] = mirror
+
+        if 'modelscope_api_key' in data:
+            key = data['modelscope_api_key']
+            if key and not key.startswith('***'):
+                current['modelscope_api_key'] = key
+            elif key == '':
+                current['modelscope_api_key'] = ''
 
         if 'civitai_api_key' in data:
             key = data['civitai_api_key']
@@ -5238,6 +5364,175 @@ async def set_parallel_downloads(request):
 
 
 # Initialize max_parallel from settings on load
+
+
+
+def _download_from_modelscope_thread(download_id, model_id, filename, target_dir):
+    '''Background thread to download a model from ModelScope'''
+    try:
+        # Normalize path separators
+        target_dir_normalized = target_dir.replace('/', os.sep).replace('\\', os.sep)
+        target_path = os.path.join(folder_paths.models_dir, target_dir_normalized)
+        
+        # Create directory if it doesn't exist
+        try:
+            os.makedirs(target_path, exist_ok=True)
+            logging.info(f'[WMD] ModelScope target directory: {target_path}')
+        except Exception as dir_error:
+            logging.error(f'[WMD] Failed to create directory {target_path}: {dir_error}')
+            raise
+        
+        with download_lock:
+            download_progress[download_id]['status'] = 'downloading'
+        
+        # ModelScope download URL format
+        base_url = f'https://www.modelscope.cn/models/{model_id}/-/resolve/main'
+        
+        # Try to get file list from ModelScope API
+        api_key = get_modelscope_api_key()
+        headers = {}
+        if api_key:
+            headers['Authorization'] = f'Bearer {api_key}'
+        
+        # First, try to find the file on ModelScope
+        file_url = None
+        try:
+            # Query ModelScope API for file info
+            api_url = f'https://www.modelscope.cn/api/v1/models/{model_id}/files'
+            resp = requests.get(api_url, headers=headers, timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
+                # Try to find matching file
+                if 'data' in data and 'files' in data['data']:
+                    for f in data['data']['files']:
+                        if filename in f.get('name', ''):
+                            file_url = f.get('download_url') or f.get('url')
+                            break
+        except Exception as e:
+            logging.warning(f'[WMD] ModelScope file list API error: {e}')
+        
+        # Fallback: construct URL directly
+        if not file_url:
+            file_url = f'{base_url}/{filename}'
+        
+        # Get file size
+        try:
+            head_resp = requests.head(file_url, allow_redirects=True, timeout=10, headers=headers)
+            total_size = int(head_resp.headers.get('content-length', 0))
+            with download_lock:
+                download_progress[download_id]['total_size'] = total_size
+        except Exception:
+            total_size = 0
+        
+        # Download with progress
+        def progress_callback(downloaded, total):
+            with download_lock:
+                download_progress[download_id]['downloaded'] = downloaded
+                download_progress[download_id]['total_size'] = total
+                if total > 0:
+                    download_progress[download_id]['progress'] = int((downloaded / total) * 100)
+        
+        # Download file
+        filename_normalized = filename.replace('/', os.sep).replace('\\', os.sep)
+        dest_file = os.path.join(target_path, filename_normalized)
+        dest_dir = os.path.dirname(dest_file)
+        if dest_dir and not os.path.exists(dest_dir):
+            os.makedirs(dest_dir, exist_ok=True)
+        
+        response = requests.get(file_url, stream=True, timeout=60, headers=headers)
+        response.raise_for_status()
+        
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+        cancelled = False
+        
+        with open(dest_file, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=1024*1024):
+                if download_id in cancelled_downloads:
+                    logging.info(f'[WMD] Download cancelled: {filename}')
+                    cancelled = True
+                    break
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    progress_callback(downloaded, total_size)
+        
+        if cancelled:
+            try:
+                os.remove(dest_file)
+            except OSError:
+                pass
+            cancelled_downloads.discard(download_id)
+            return
+        
+        with download_lock:
+            download_progress[download_id]['status'] = 'completed'
+            download_progress[download_id]['progress'] = 100
+        
+        # Save metadata
+        ms_url = f'https://www.modelscope.cn/models/{model_id}'
+        metadata = load_model_metadata()
+        metadata[filename] = {
+            'filename': filename,
+            'url': ms_url,
+            'url_source': 'modelscope',
+            'source': 'modelscope',
+            'model_id': model_id,
+            'type': target_dir,
+            'downloaded_at': time.strftime('%Y-%m-%dT%H:%M:%S')
+        }
+        save_model_metadata(metadata)
+        
+        add_to_download_history({
+            'id': download_id,
+            'filename': filename,
+            'status': 'completed',
+            'total_size': download_progress.get(download_id, {}).get('total_size', 0),
+            'directory': target_dir,
+            'url': ms_url,
+            'model_id': model_id,
+            'source': 'modelscope'
+        })
+        
+        logging.info(f'[WMD] Downloaded from ModelScope: {filename}')
+        
+    except requests.exceptions.HTTPError as e:
+        error_msg = str(e)
+        if e.response is not None:
+            status_code = e.response.status_code
+            if status_code in [401, 403]:
+                error_msg = f'Unauthorized (HTTP {status_code}): ModelScope authentication required.'
+            elif status_code == 404:
+                error_msg = f'Model or file not found (HTTP 404)'
+        logging.error(f'[WMD] ModelScope download error: {error_msg}')
+        with download_lock:
+            download_progress[download_id]['status'] = 'error'
+            download_progress[download_id]['error'] = error_msg
+        add_to_download_history({
+            'id': download_id,
+            'filename': filename,
+            'status': 'error',
+            'error': error_msg,
+            'directory': target_dir,
+            'source': 'modelscope'
+        })
+    except Exception as e:
+        logging.error(f'[WMD] ModelScope download error: {e}')
+        with download_lock:
+            download_progress[download_id]['status'] = 'error'
+            download_progress[download_id]['error'] = str(e)
+        add_to_download_history({
+            'id': download_id,
+            'filename': filename,
+            'status': 'error',
+            'error': str(e),
+            'directory': target_dir,
+            'source': 'modelscope'
+        })
+    finally:
+        cancelled_downloads.discard(download_id)
+
+
 def _init_parallel_setting():
     global max_parallel_downloads
     settings = load_settings()
@@ -5249,4 +5544,6 @@ _init_parallel_setting()
 load_tavily_cache()
 
 logging.info("[Workflow-Models-Downloader] Extension loaded successfully")
+
+
 
