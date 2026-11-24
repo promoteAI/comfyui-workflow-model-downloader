@@ -1,11 +1,15 @@
 # ComfyUI Workflow Models Downloader
 
-[![ComfyUI Registry](https://img.shields.io/badge/ComfyUI-Registry-green)](https://registry.comfy.org/publishers/slahiri/nodes/comfyui-workflow-models-downloader)
+[![ComfyUI Registry](https://img.shields.io/badge/ComfyUI-Registry-green)](https://registry.comfy.org/publishers/promoteAI/nodes/comfyui-workflow-model-downloader-mirror)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![GitHub stars](https://img.shields.io/github/stars/slahiri/ComfyUI-Workflow-Models-Downloader.svg)](https://github.com/slahiri/ComfyUI-Workflow-Models-Downloader/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/promoteAI/comfyui-workflow-model-downloader.svg)](https://github.com/promoteAI/comfyui-workflow-model-downloader/stargazers)
 
 A powerful ComfyUI extension that automatically detects models in your workflow and helps download missing ones from HuggingFace, CivitAI, and other sources.
+
+## Fork Notice
+
+This is a community fork of [slahiri/ComfyUI-Workflow-Models-Downloader](https://github.com/slahiri/ComfyUI-Workflow-Models-Downloader). It adds a **configurable HuggingFace mirror** so downloads can go through an alternate mirror endpoint (e.g. `https://hf-mirror.com`) in addition to the upstream feature set.
 
 ## Screenshots
 
@@ -153,3 +157,6 @@ For full functionality, configure these API keys in the Settings tab:
 ## License
 
 MIT License
+
+
+

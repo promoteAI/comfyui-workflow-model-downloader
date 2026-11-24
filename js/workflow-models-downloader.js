@@ -4419,7 +4419,7 @@ class WorkflowModelsDownloader {
                     </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <a href="${versionInfo.github_url || 'https://github.com/slahiri/ComfyUI-Workflow-Models-Downloader'}" target="_blank" class="wmd-btn wmd-btn-secondary wmd-btn-small" title="View on GitHub">
+                    <a href="${versionInfo.github_url || 'https://github.com/promoteAI/comfyui-workflow-model-downloader'}" target="_blank" class="wmd-btn wmd-btn-secondary wmd-btn-small" title="View on GitHub">
                         GitHub
                     </a>
                     ${updateButton}
@@ -4484,7 +4484,7 @@ class WorkflowModelsDownloader {
                     </ol>
                     <div class="wmd-help-warning">
                         <strong>Alternative:</strong> You can also install manually by cloning the repository:<br>
-                        <code>git clone https://github.com/slahiri/ComfyUI-Workflow-Models-Downloader</code><br>
+                        <code>git clone https://github.com/promoteAI/comfyui-workflow-model-downloader</code><br>
                         into your <code>ComfyUI/custom_nodes/</code> folder.
                     </div>
                 </div>
@@ -5559,3 +5559,4 @@ app.registerExtension({
         console.log(`[Workflow-Models-Downloader] v${VERSION} loaded successfully`);
     }
 });
+

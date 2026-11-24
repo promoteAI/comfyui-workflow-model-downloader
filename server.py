@@ -63,8 +63,8 @@ SETTINGS_FILE = os.path.join(EXTENSION_PATH, 'settings.json')
 
 # Version info
 PYPROJECT_FILE = os.path.join(EXTENSION_PATH, 'pyproject.toml')
-GITHUB_REPO = "slahiri/ComfyUI-Workflow-Models-Downloader"
-REGISTRY_URL = "https://registry.comfy.org/nodes/comfyui-workflow-models-downloader"
+GITHUB_REPO = "promoteAI/comfyui-workflow-model-downloader"
+REGISTRY_URL = "https://registry.comfy.org/nodes/comfyui-workflow-model-downloader-mirror"
 
 def get_installed_version():
     """Get installed version from pyproject.toml"""
@@ -5249,3 +5249,4 @@ _init_parallel_setting()
 load_tavily_cache()
 
 logging.info("[Workflow-Models-Downloader] Extension loaded successfully")
+

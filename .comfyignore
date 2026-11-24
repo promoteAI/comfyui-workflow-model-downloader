@@ -1,0 +1,8 @@
+# Development-only files excluded from the published registry archive.
+# The references/ folder contains the upstream source repo checkout and is
+# not part of the published custom node package.
+references/
+*.pyc
+__pycache__/
+.vscode/
+.idea/
