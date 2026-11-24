@@ -93,8 +93,8 @@ Search for "Workflow Models Downloader" in ComfyUI Manager and click Install.
 ### Manual Installation
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/slahiri/ComfyUI-Workflow-Models-Downloader.git
-pip install -r ComfyUI-Workflow-Models-Downloader/requirements.txt
+git clone https://github.com/promoteAI/comfyui-workflow-model-downloader
+pip install -r comfyui-workflow-model-downloader/requirements.txt
 ```
 
 Restart ComfyUI after installation.
