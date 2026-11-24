@@ -2996,7 +2996,7 @@ async def download_from_modelscope(request):
             return web.json_response({'error': 'Missing required fields'}, status=400)
 
         # Generate download ID
-        download_id = f"ms_{model_id}_{filename}".replace("/", "_").replace("\", "_")
+        download_id = f"ms_{model_id}_{filename}".replace("/", "_").replace(chr(92), "_")
 
         # Check if already downloading
         with download_lock:
@@ -3454,7 +3454,7 @@ async def get_settings(request):
             'civitai_api_key': mask_token(settings.get('civitai_api_key', '')),
             'tavily_api_key': mask_token(settings.get('tavily_api_key', '')),
             'huggingface_token_set': bool(settings.get('huggingface_token', '')),
-            'modelscope_api_key_set': bool(settings.get('modelscope_api_key', '')), bool(settings.get('modelscope_api_key', '')),
+            'modelscope_api_key_set': bool(settings.get('modelscope_api_key', '')),  # ModelScope API key set status
             'civitai_api_key_set': bool(settings.get('civitai_api_key', '')),
             'tavily_api_key_set': bool(settings.get('tavily_api_key', '')),
             'enable_advanced_search': settings.get('enable_advanced_search', False),
