@@ -21,6 +21,7 @@ Documentation = "https://github.com/promoteAI/comfyui-workflow-model-downloader#
 "Bug Tracker" = "https://github.com/promoteAI/comfyui-workflow-model-downloader/issues"
 
 [tool.comfy]
-PublisherId = "promoteAI"
+PublisherId = "promote-ai"
 DisplayName = "Workflow Model Downloader (Mirror)"
 Icon = "https://raw.githubusercontent.com/promoteAI/comfyui-workflow-model-downloader/main/images/workflow-models-tab.png"
+
