@@ -3541,6 +3541,81 @@ def mask_token(token):
 # Model Browser Endpoints
 # ============================================================================
 
+
+
+def download_with_resume(url, dest_file, headers=None, download_id=None):
+    '''Download file with resume support using Range header'''
+    downloaded = 0
+    total_size = 0
+    
+    # Check if partial file exists
+    if os.path.exists(dest_file):
+        downloaded = os.path.getsize(dest_file)
+    
+    # Prepare headers with Range if we have partial download
+    range_headers = dict(headers or {})
+    if downloaded > 0:
+        range_headers['Range'] = f'bytes={downloaded}-'
+    
+    # Get total size
+    try:
+        head_resp = requests.head(url, timeout=10, headers=headers)
+        head_resp.raise_for_status()
+        total_size = int(head_resp.headers.get('content-length', 0))
+    except Exception:
+        total_size = 0
+    
+    # If we have a partial file and server supports resume
+    if downloaded > 0 and total_size > downloaded:
+        try:
+            resp = requests.get(url, stream=True, timeout=60, headers=range_headers)
+            if resp.status_code == 206:  # Partial content
+                with open(dest_file, 'ab') as f:
+                    for chunk in resp.iter_content(chunk_size=1024*1024):
+                        if download_id and download_id in cancelled_downloads:
+                            return False, downloaded, total_size, "Cancelled"
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if download_id and download_id in download_progress:
+                                download_progress[download_id]['downloaded'] = downloaded
+                                download_progress[download_id]['total_size'] = total_size
+                                if total_size > 0:
+                                    download_progress[download_id]['progress'] = int((downloaded / total_size) * 100)
+                return True, downloaded, total_size, None
+        except Exception as e:
+            logging.warning(f"[WMD] Resume failed ({e}), starting fresh download")
+    
+    # Fresh download (no resume or resume failed)
+    if downloaded > 0:
+        # Remove partial file and start fresh
+        try:
+            os.remove(dest_file)
+        except:
+            pass
+        downloaded = 0
+    
+    resp = requests.get(url, stream=True, timeout=60, headers=headers)
+    resp.raise_for_status()
+    total_size = int(resp.headers.get('content-length', 0))
+    
+    with open(dest_file, 'wb') as f:
+        for chunk in resp.iter_content(chunk_size=1024*1024):
+            if download_id and download_id in cancelled_downloads:
+                return False, downloaded, total_size, "Cancelled"
+            if chunk:
+                f.write(chunk)
+                downloaded += len(chunk)
+                if download_id and download_id in download_progress:
+                    download_progress[download_id]['downloaded'] = downloaded
+                    download_progress[download_id]['total_size'] = total_size
+                    if total_size > 0:
+                        download_progress[download_id]['progress'] = int((downloaded / total_size) * 100)
+    
+    return True, downloaded, total_size, None
+
+
+
 def format_size(size_bytes):
     """Format file size in human-readable format"""
     if size_bytes < 1024:
@@ -5439,23 +5514,16 @@ def _download_from_modelscope_thread(download_id, model_id, filename, target_dir
         if dest_dir and not os.path.exists(dest_dir):
             os.makedirs(dest_dir, exist_ok=True)
         
-        response = requests.get(file_url, stream=True, timeout=60, headers=headers)
-        response.raise_for_status()
+        # Download with resume support
+        success, downloaded, total_size, error = download_with_resume(
+            file_url, dest_file, headers=headers, download_id=download_id
+        )
         
-        total_size = int(response.headers.get('content-length', 0))
-        downloaded = 0
-        cancelled = False
-        
-        with open(dest_file, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=1024*1024):
-                if download_id in cancelled_downloads:
-                    logging.info(f'[WMD] Download cancelled: {filename}')
-                    cancelled = True
-                    break
-                if chunk:
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    progress_callback(downloaded, total_size)
+        if error == "Cancelled":
+            cancelled_downloads.discard(download_id)
+            return
+        elif error:
+            raise Exception(error)
         
         if cancelled:
             try:
